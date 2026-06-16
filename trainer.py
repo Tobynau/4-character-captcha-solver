@@ -9,9 +9,9 @@ os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 IMG_H = 64
 IMG_W = 320
 MAX_LABEL_LEN = 10  # sanity bound on label length, not a fixed output slot count anymore
-EPOCHS = 100
-BATCH_SIZE = 4
-ACCUM_STEPS = 8  # effective batch size = BATCH_SIZE * ACCUM_STEPS = 1024
+EPOCHS = 10
+BATCH_SIZE = 2
+ACCUM_STEPS = 64  # effective batch size = BATCH_SIZE * ACCUM_STEPS = 1024
 LR = 1e-3
 VAL_FRACTION = 0.1
 BG_FILL = 255  # captchas are light-background/dark-text; pad/fill to match
