@@ -4,7 +4,7 @@ import argparse
 from PIL import Image
 import torchvision.transforms as T
 
-from trainer import CaptchaCNN, IMG_H, IMG_W
+from trainer import CaptchaCNN, IMG_H, IMG_W, decode
 
 MODEL_PATH = "captcha_model.pth"
 VOCAB_PATH = "vocab.json"
@@ -35,10 +35,9 @@ def predict(image_path, model, idx_to_char, device):
     img = transform(img).unsqueeze(0).to(device)
 
     with torch.no_grad():
-        logits = model(img)  # (1, 4, num_classes)
+        logits = model(img)  # (1, MAX_LEN, num_classes)
 
-    indices = logits[0].argmax(-1).tolist()
-    return "".join(idx_to_char[i] for i in indices)
+    return decode(logits[0], idx_to_char)
 
 
 if __name__ == "__main__":
