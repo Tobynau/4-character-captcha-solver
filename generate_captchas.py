@@ -10,8 +10,8 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 SAVE_DIR = "captchas"
 LABELS_FILE = "labels.csv"
 
-CHARSET = "23456789abcdefghkmnpqrstuvwxyz"  # excludes ambiguous 0/1/i/j/l/o
-MIN_LEN, MAX_LEN = 4, 8
+CHARSET = "23456789abcdefghkmnpqrstuvwxyz01ijlo"  # excludes ambiguous 0/1/i/j/l/o
+MIN_LEN, MAX_LEN = 3, 10
 
 FONT_PATHS = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
@@ -27,9 +27,6 @@ FONT_PATHS = [
     "/usr/share/fonts/opentype/urw-base35/NimbusMonoPS-Italic.otf",
 ]
 FONT_PATHS = [p for p in FONT_PATHS if os.path.exists(p)]
-
-IMG_H = 80
-CHAR_CELL = 32  # nominal horizontal space per character before padding
 
 COMPLEXITY_LEVELS = ["simple", "medium", "hard"]
 
@@ -126,14 +123,17 @@ def wave_distort(img, amplitude, period):
 
 
 def generate_one(label, complexity):
-    length = len(label)
-    width = max(120, length * CHAR_CELL + 40)
+    img_h = random.randint(20, 100)  # randomize height per image to encourage robustness to scaling
+    char_cell = random.randint(16, 60)  # average width per char, used to determine overall image width
 
-    img, draw = background(width, IMG_H, complexity)
+    length = len(label)
+    width = max(120, length * char_cell + 40)
+
+    img, draw = background(width, img_h, complexity)
 
     if complexity != "simple":
-        draw_noise_lines(draw, width, IMG_H, complexity)
-    draw_noise_dots(draw, width, IMG_H, complexity)
+        draw_noise_lines(draw, width, img_h, complexity)
+    draw_noise_dots(draw, width, img_h, complexity)
 
     x = random.randint(10, 20)
     for ch in label:
@@ -148,17 +148,17 @@ def generate_one(label, complexity):
             angle = random.uniform(-8, 8)
         tile = tile.rotate(angle, expand=True, resample=Image.BICUBIC)
 
-        y = random.randint(4, max(4, IMG_H - tile.height - 4))
+        y = random.randint(4, max(4, img_h - tile.height - 4))
         jitter = random.randint(-4, 4) if complexity != "simple" else 0
         img.paste(tile, (x + jitter, y), tile)
 
         x += tile.width - random.randint(6, 14)
 
-    img = img.crop((0, 0, max(width, x + 20), IMG_H))
+    img = img.crop((0, 0, max(width, x + 20), img_h))
 
     if complexity != "simple":
         draw2 = ImageDraw.Draw(img)
-        draw_noise_lines(draw2, img.width, IMG_H, complexity)
+        draw_noise_lines(draw2, img.width, img_h, complexity)
 
     if complexity == "hard":
         img = wave_distort(img, amplitude=random.randint(2, 4), period=random.randint(20, 40))
@@ -188,26 +188,28 @@ def main():
     os.makedirs(args.save_dir, exist_ok=True)
     start = next_index(args.save_dir)
 
-    rows = []
-    for i in range(args.count):
-        length = random.randint(args.min_len, args.max_len)
-        label = "".join(random.choice(CHARSET) for _ in range(length))
-        complexity = random.choice(COMPLEXITY_LEVELS)
-
-        img = generate_one(label, complexity)
-        filename = f"{start + i}.png"
-        img.save(os.path.join(args.save_dir, filename))
-        rows.append((filename, label))
-
-        if (i + 1) % 200 == 0:
-            print(f"[{i + 1}/{args.count}] generated")
-
+    count = 0
     with open(args.labels_file, "a", newline="") as f:
         writer = csv.writer(f)
-        for filename, label in rows:
-            writer.writerow([filename, label])
+        for i in range(args.count):
+            length = random.randint(args.min_len, args.max_len)
+            label = "".join(random.choice(CHARSET) for _ in range(length))
+            complexity = random.choice(COMPLEXITY_LEVELS)
 
-    print(f"Done. Wrote {len(rows)} images to {args.save_dir}/ and appended labels to {args.labels_file}")
+            img = generate_one(label, complexity)
+            filename = f"{start + i}.png"
+            img.save(os.path.join(args.save_dir, filename))
+
+            # write+flush per image so a killed/interrupted run never leaves
+            # unlabeled images behind
+            writer.writerow([filename, label])
+            f.flush()
+            count += 1
+
+            if count % 200 == 0:
+                print(f"[{count}/{args.count}] generated")
+
+    print(f"Done. Wrote {count} images to {args.save_dir}/ and appended labels to {args.labels_file}")
 
 
 if __name__ == "__main__":
